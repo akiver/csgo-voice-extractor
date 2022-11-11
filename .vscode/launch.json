@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": ".",
+      "windows": {
+        "env": {
+          "CGO_ENABLED": "1",
+          "GOARCH": "386"
+        },
+        "args": ["test.dem"]
+      },
+      "osx": {
+        "env": {
+          "DYLD_LIBRARY_PATH": ".",
+          "CGO_ENABLED": "1",
+          "GOARCH": "amd64"
+        },
+        "args": ["test.dem"]
+      },
+      "linux": {
+        "env": {
+          "LD_LIBRARY_PATH": ".",
+          "CGO_ENABLED": "1",
+          "GOARCH": "amd64"
+        },
+        "args": ["test.dem"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+*.dll
+*.dylib
+*.so
+*.bin
+*.wav
+*.dem
+bin
