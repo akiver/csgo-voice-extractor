@@ -1,0 +1,33 @@
+{
+  "name": "@akiver/csgo-voice-extractor",
+  "version": "1.0.0",
+  "description": "CLI to export players' voices from CSGO demos into WAV files.",
+  "author": "AkiVer",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/akiver/csgo-voice-extractor/issues"
+  },
+  "homepage": "https://github.com/akiver/csgo-voice-extractor#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akiver/csgo-voice-extractor.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "keywords": [
+    "Counter-Strike",
+    "CS",
+    "CSGO",
+    "audio"
+  ]
+}

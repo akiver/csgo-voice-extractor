@@ -1,7 +1,5 @@
-*.dll
-*.dylib
-*.so
+*.exe
+csgove
 *.bin
 *.wav
 *.dem
-bin

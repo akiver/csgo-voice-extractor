@@ -23,6 +23,7 @@ CLI to export players' voices from CSGO demos into WAV files.
 2. Copy/paste the following files from the `CSGO` installation folder next to the executable:
 
 - `libtier0.dylib`
+- `libvstdlib.dylib`
 - `vaudio_celt.dylib`
 
 > **Note**  
@@ -126,7 +127,7 @@ _Because the CSGO audio library is a 32-bit DLL, you need a 32-bit `GCC` and set
 
 ### macOS
 
-1. Copy/paste `libtier0.dylib` and `vaudio_celt.dylib` from the CSGO installation folder in the project's root folder.
+1. Copy/paste `libtier0.dylib`, `libvstdlib.dylib` and `vaudio_celt.dylib` from the CSGO installation folder in the project's root folder.
 2. `DYLD_LIBRARY_PATH=. CGO_ENABLED=1 GOARCH=amd64 go run .`
 
 > **Warning**  
