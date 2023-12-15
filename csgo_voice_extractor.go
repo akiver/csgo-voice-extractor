@@ -14,8 +14,8 @@ import (
 	"strings"
 	"unsafe"
 
-	dem "github.com/markus-wa/demoinfocs-golang/v3/pkg/demoinfocs"
-	"github.com/markus-wa/demoinfocs-golang/v3/pkg/demoinfocs/msg"
+	dem "github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/msg"
 	wav "github.com/youpy/go-wav"
 	"google.golang.org/protobuf/proto"
 )
