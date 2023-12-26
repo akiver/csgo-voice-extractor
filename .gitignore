@@ -3,3 +3,8 @@ csgove
 *.bin
 *.wav
 *.dem
+*.pc
+opus
+dist/**/opus.dll
+dist/**/libopus.0.dylib
+dist/**/libopus.so.0

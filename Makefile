@@ -1,5 +1,6 @@
 GO_FLAGS += "-ldflags=-s -w"
 GO_FLAGS += -trimpath
+GO_FLAGS += -tags nolibopusfile
 BINARY_NAME=csgove
 
 .DEFAULT_GOAL := help
@@ -11,13 +12,16 @@ build-unixlike:
 	CGO_ENABLED=1 GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build $(GO_FLAGS) -o "$(BIN_DIR)/$(BINARY_NAME)"
 
 build-darwin: ## Build for Darwin
-	@$(MAKE) GOOS=darwin GOARCH=amd64 BIN_DIR=dist/bin/darwin-x64 build-unixlike
+	@test -f dist/bin/darwin-x64/libopus.0.dylib || (echo "dist/bin/darwin-x64/libopus.0.dylib is missing" && false)
+	@$(MAKE) GOOS=darwin GOARCH=amd64 CGO_LDFLAGS="-L/usr/local/Cellar" BIN_DIR=dist/bin/darwin-x64 build-unixlike
 
 build-linux: ## Build for Linux
+	@test -f dist/bin/linux-x64/libopus.so.0 || (echo "dist/bin/linux-x64/libopus.so.0 is missing" && false)
 	@$(MAKE) GOOS=linux GOARCH=amd64 BIN_DIR=dist/bin/linux-x64 build-unixlike
 
 build-windows: ## Build for Windows
-	CGO_ENABLED=1 GOOS=windows GOARCH=386 go build $(GO_FLAGS) -o dist/bin/win32-x64/$(BINARY_NAME).exe
+	@test -f dist/bin/win32-x64/opus.dll || (echo "dist/bin/win32-x64/opus.dll is missing" && false)
+	PKG_CONFIG_PATH=$(shell realpath .) CGO_ENABLED=1 GOOS=windows GOARCH=386 go build $(GO_FLAGS) -o dist/bin/win32-x64/$(BINARY_NAME).exe
 
 clean: ## Clean up project files
 	rm -f *.wav *.bin
