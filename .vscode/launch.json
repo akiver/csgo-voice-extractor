@@ -2,33 +2,73 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Launch",
+      "name": "Launch CS2",
       "type": "go",
       "request": "launch",
       "mode": "auto",
       "program": ".",
       "windows": {
         "env": {
+          "LD_LIBRARY_PATH": "./dist/bin/win32-x64",
           "CGO_ENABLED": "1",
-          "GOARCH": "386"
+          "GOARCH": "386",
+          "PKG_CONFIG_PATH": "${workspaceRoot}"
         },
-        "args": ["test.dem"]
+        "args": ["cs2.dem"],
+        "buildFlags": "-tags nolibopusfile"
       },
       "osx": {
         "env": {
-          "DYLD_LIBRARY_PATH": ".",
+          "DYLD_LIBRARY_PATH": "./dist/bin/darwin-x64",
           "CGO_ENABLED": "1",
           "GOARCH": "amd64"
         },
-        "args": ["test.dem"]
+        "args": ["cs2.dem"],
+        "buildFlags": "-tags nolibopusfile"
       },
       "linux": {
         "env": {
-          "LD_LIBRARY_PATH": ".",
+          "LD_LIBRARY_PATH": "./dist/bin/linux-x64",
           "CGO_ENABLED": "1",
           "GOARCH": "amd64"
         },
-        "args": ["test.dem"]
+        "args": ["cs2.dem"],
+        "buildFlags": "-tags nolibopusfile"
+      }
+    },
+    {
+      "name": "Launch CSGO",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": ".",
+      "windows": {
+        "env": {
+          "LD_LIBRARY_PATH": "./dist/bin/win32-x64",
+          "CGO_ENABLED": "1",
+          "GOARCH": "386",
+          "PKG_CONFIG_PATH": "${workspaceRoot}"
+        },
+        "args": ["csgo.dem"],
+        "buildFlags": "-tags nolibopusfile"
+      },
+      "osx": {
+        "env": {
+          "DYLD_LIBRARY_PATH": "./dist/bin/darwin-x64",
+          "CGO_ENABLED": "1",
+          "GOARCH": "amd64"
+        },
+        "args": ["csgo.dem"],
+        "buildFlags": "-tags nolibopusfile"
+      },
+      "linux": {
+        "env": {
+          "LD_LIBRARY_PATH": "./dist/bin/linux-x64",
+          "CGO_ENABLED": "1",
+          "GOARCH": "amd64"
+        },
+        "buildFlags": "-tags nolibopusfile",
+        "args": ["csgo.dem"]
       }
     }
   ]

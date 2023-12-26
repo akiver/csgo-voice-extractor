@@ -1,0 +1,24 @@
+# https://github.com/hraban/opus uses pkg-config to link Opus.
+# This pkg-config script is used only on Windows because there is no easy way like on Unix system to setup it.
+# It's based on the official script https://github.com/xiph/opus/blob/master/opus.pc.in
+# This script assumes that the opus.dll and C header files are located in the default TDM-GCC installation location!
+# If your GCC installation location is different, you have to adjust the "prefix" variable below.
+#
+# C header files have to be in a "include/opus" folder. It should be "C:/TDM-GCC-64/bin/include/opus" when using TDM.
+#
+# Opus codec reference implementation pkg-config file
+
+prefix=C:/TDM-GCC-64/bin
+exec_prefix=${prefix}
+libdir=${exec_prefix}
+includedir=${prefix}/include
+
+Name: Opus
+Description: Opus IETF audio codec (floating-point build)
+URL: https://opus-codec.org/
+Version: 1.4
+Requires:
+Conflicts:
+Libs: -L${libdir} -lopus
+Libs.private:
+Cflags: -I${includedir}/opus

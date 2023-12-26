@@ -1,6 +1,7 @@
 {
   "files.exclude": {
     "*.wav": true,
-    "*.bin": true
+    "*.bin": true,
+    "dist": true
   }
 }
