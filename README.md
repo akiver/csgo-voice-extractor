@@ -101,7 +101,7 @@ _Because the CSGO audio library is a 32-bit DLL, you need a 32-bit `GCC` and set
 4. Extract the archive, rename the folder to `opus` and place it in the project's root folder
 5. Open the `opus/win32/VS2015/opus.sln` file with Visual Studio (upgrade the project if asked)
 6. Build the `Release` configuration for `Win32` (**not `x64`** - it's important to build the 32-bit version!)
-7. Copy/paste the `opus.dll` file in `$GCC_PATH` and `dist/bin/windows-x64`
+7. Copy/paste the `opus.dll` file in `$GCC_PATH` and `dist/bin/win32-x64`
 8. Copy/paste the C header files located inside the `include` folder file in `$GCC_PATH\include\opus` (create the folders if needed)
 9. Copy/paste the `opus.pc.example` to `opus.pc` file and edit the `prefix` variable to match your `GCC` installation path **if necessary**.
 10. `PKG_CONFIG_PATH=$(realpath .) LD_LIBRARY_PATH=dist/bin/win32-x64 CGO_ENABLED=1 GOARCH=386 go run -tags nolibopusfile .`
