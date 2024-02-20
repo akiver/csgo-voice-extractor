@@ -39,6 +39,8 @@ type UnsupportedCodec struct {
 	Version int32
 }
 
+var UnsupportedCodecError *UnsupportedCodec
+
 func (err *Error) Error() string {
 	if err.Err != nil {
 		return fmt.Sprintf("%s\n%s", err.Message, err.Err.Error())
@@ -116,5 +118,19 @@ func AssertLibraryFilesExist() {
 				ExitCode: MissingLibraryFiles,
 			})
 		}
+	}
+}
+
+func AssertCodeIsSupported() {
+	if UnsupportedCodecError != nil {
+		HandleError(Error{
+			Message: fmt.Sprintf(
+				"unsupported audio codec: %s %d %d",
+				UnsupportedCodecError.Name,
+				UnsupportedCodecError.Quality,
+				UnsupportedCodecError.Version,
+			),
+			ExitCode: UnsupportedAudioCodec,
+		})
 	}
 }

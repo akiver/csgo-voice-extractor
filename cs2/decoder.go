@@ -11,26 +11,25 @@ const (
 	FrameSize = 480
 )
 
-type OpusDecoder struct {
-	decoder *opus.Decoder
-
+type SteamDecoder struct {
+	decoder      *opus.Decoder
 	currentFrame uint16
 }
 
-func NewOpusDecoder(sampleRate, channels int) (*OpusDecoder, error) {
+func NewSteamDecoder(sampleRate int, channels int) (*SteamDecoder, error) {
 	decoder, err := opus.NewDecoder(sampleRate, channels)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &OpusDecoder{
+	return &SteamDecoder{
 		decoder:      decoder,
 		currentFrame: 0,
 	}, nil
 }
 
-func (d *OpusDecoder) Decode(b []byte) ([]float32, error) {
+func (d *SteamDecoder) Decode(b []byte) ([]float32, error) {
 	buf := bytes.NewBuffer(b)
 
 	output := make([]float32, 0, 1024)
@@ -89,7 +88,7 @@ func (d *OpusDecoder) Decode(b []byte) ([]float32, error) {
 	return output, nil
 }
 
-func (d *OpusDecoder) decodeSteamChunk(b []byte) ([]float32, error) {
+func (d *SteamDecoder) decodeSteamChunk(b []byte) ([]float32, error) {
 	o := make([]float32, FrameSize)
 
 	n, err := d.decoder.DecodeFloat32(b, o)
@@ -101,7 +100,7 @@ func (d *OpusDecoder) decodeSteamChunk(b []byte) ([]float32, error) {
 	return o[:n], nil
 }
 
-func (d *OpusDecoder) decodeLoss(samples uint16) ([]float32, error) {
+func (d *SteamDecoder) decodeLoss(samples uint16) ([]float32, error) {
 	loss := min(samples, 10)
 
 	o := make([]float32, 0, FrameSize*loss)
@@ -117,4 +116,19 @@ func (d *OpusDecoder) decodeLoss(samples uint16) ([]float32, error) {
 	}
 
 	return o, nil
+}
+
+func NewOpusDecoder(sampleRate int, channels int) (decoder *opus.Decoder, err error) {
+	return opus.NewDecoder(sampleRate, channels)
+}
+
+func Decode(decoder *opus.Decoder, data []byte) (pcm []float32, err error) {
+	pcm = make([]float32, 1024)
+
+	writtenLength, err := decoder.DecodeFloat32(data, pcm)
+	if err != nil {
+		return
+	}
+
+	return pcm[:writtenLength], nil
 }

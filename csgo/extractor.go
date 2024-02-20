@@ -20,7 +20,6 @@ import (
 )
 
 var demoPaths []string
-var unsupportedCodec *common.UnsupportedCodec
 
 func getPlayersVoiceData(file *os.File) (map[string][]byte, error) {
 	var voiceDataPerPlayer = map[string][]byte{}
@@ -39,7 +38,7 @@ func getPlayersVoiceData(file *os.File) (map[string][]byte, error) {
 
 	parser.RegisterNetMessageHandler(func(m *msg.CSVCMsg_VoiceInit) {
 		if m.GetCodec() != "vaudio_celt" || m.GetQuality() != 5 || m.GetVersion() != 3 {
-			unsupportedCodec = &common.UnsupportedCodec{
+			common.UnsupportedCodecError = &common.UnsupportedCodec{
 				Name:    m.GetCodec(),
 				Quality: m.GetQuality(),
 				Version: m.GetVersion(),
@@ -119,23 +118,21 @@ func Extract(options common.ExtractOptions) {
 	}
 
 	playersVoiceData, err := getPlayersVoiceData(options.File)
-	if unsupportedCodec != nil {
-		common.HandleError(common.Error{
-			Message:  fmt.Sprintf("unsupported audio codec: %s %d %d", unsupportedCodec.Name, unsupportedCodec.Quality, unsupportedCodec.Version),
-			Err:      err,
-			ExitCode: common.UnsupportedAudioCodec,
-		})
-		return
-	}
+	common.AssertCodeIsSupported()
 
 	demoPath := options.DemoPath
 	isCorruptedDemo := errors.Is(err, dem.ErrUnexpectedEndOfDemo)
-	if err != nil && !isCorruptedDemo {
+	isCanceled := errors.Is(err, dem.ErrCancelled)
+	if err != nil && !isCorruptedDemo && !isCanceled {
 		common.HandleError(common.Error{
 			Message:  fmt.Sprintf("Failed to parse demo: %s\n", demoPath),
 			Err:      err,
 			ExitCode: common.ParsingError,
 		})
+		return
+	}
+
+	if isCanceled {
 		return
 	}
 

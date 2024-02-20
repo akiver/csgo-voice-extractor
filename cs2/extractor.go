@@ -3,6 +3,7 @@ package cs2
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,9 @@ import (
 	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/msgs2"
 )
 
+// Opus format since the arms race update (07/02/2024), Steam format before that.
+var format msgs2.VoiceDataFormatT
+
 func Extract(options common.ExtractOptions) {
 	common.AssertLibraryFilesExist()
 
@@ -21,10 +25,18 @@ func Extract(options common.ExtractOptions) {
 	parser := dem.NewParser(options.File)
 	defer parser.Close()
 
-	// The message CSVCMsg_VoiceInit is present with CS2 demos but the codec is always vaudio_speex which is wrong.
-	// We don't check for unsupported codecs as we do for CS:GO demos.
 	parser.RegisterNetMessageHandler(func(m *msgs2.CSVCMsg_VoiceData) {
 		playerID := common.GetPlayerID(parser, m.GetXuid())
+		format = m.GetAudio().GetFormat()
+
+		if format != msgs2.VoiceDataFormatT_VOICEDATA_FORMAT_STEAM && format != msgs2.VoiceDataFormatT_VOICEDATA_FORMAT_OPUS {
+			common.UnsupportedCodecError = &common.UnsupportedCodec{
+				Name: format.String(),
+			}
+			parser.Cancel()
+			return
+		}
+
 		if playerID == "" {
 			return
 		}
@@ -40,12 +52,17 @@ func Extract(options common.ExtractOptions) {
 
 	demoPath := options.DemoPath
 	isCorruptedDemo := errors.Is(err, dem.ErrUnexpectedEndOfDemo)
-	if err != nil && !isCorruptedDemo {
+	isCanceled := errors.Is(err, dem.ErrCancelled)
+	if err != nil && !isCorruptedDemo && !isCanceled {
 		common.HandleError(common.Error{
 			Message:  fmt.Sprintf("Failed to parse demo: %s\n", demoPath),
 			Err:      err,
 			ExitCode: common.ParsingError,
 		})
+	}
+
+	if isCanceled {
+		return
 	}
 
 	if len(voiceDataPerPlayer) == 0 {
@@ -60,14 +77,18 @@ func Extract(options common.ExtractOptions) {
 	for playerID, voiceData := range voiceDataPerPlayer {
 		playerFileName := fmt.Sprintf("%s_%s", demoName, playerID)
 		wavFilePath := fmt.Sprintf("%s/%s.wav", options.OutputPath, playerFileName)
-		convertAudioDataToWavFiles(voiceData, wavFilePath)
+		if format == msgs2.VoiceDataFormatT_VOICEDATA_FORMAT_OPUS {
+			convertOpusAudioDataToWavFiles(voiceData, wavFilePath)
+		} else {
+			convertAudioDataToWavFiles(voiceData, wavFilePath)
+		}
 	}
 }
 
 func convertAudioDataToWavFiles(payloads [][]byte, fileName string) {
 	// This sample rate can be set using data from the VoiceData net message.
 	// But every demo processed has used 24000 and is single channel.
-	voiceDecoder, err := NewOpusDecoder(24000, 1)
+	voiceDecoder, err := NewSteamDecoder(24000, 1)
 
 	if err != nil {
 		common.HandleError(common.Error{
@@ -132,6 +153,66 @@ func convertAudioDataToWavFiles(payloads [][]byte, fileName string) {
 	}
 
 	if err := enc.Write(buf); err != nil {
+		common.HandleError(common.Error{
+			Message:  "Couldn't write WAV file",
+			Err:      err,
+			ExitCode: common.WavFileCreationError,
+		})
+	}
+}
+
+func convertOpusAudioDataToWavFiles(data [][]byte, fileName string) {
+	decoder, err := NewOpusDecoder(48000, 1)
+	if err != nil {
+		common.HandleError(common.Error{
+			Message:  "Failed to create Opus decoder",
+			Err:      err,
+			ExitCode: common.DecodingError,
+		})
+		return
+	}
+
+	var pcmBuffer []int
+
+	for _, d := range data {
+		pcm, err := Decode(decoder, d)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		pp := make([]int, len(pcm))
+
+		for i, p := range pcm {
+			pp[i] = int(p * 2147483647)
+		}
+
+		pcmBuffer = append(pcmBuffer, pp...)
+	}
+
+	file, err := os.Create(fileName)
+	if err != nil {
+		common.HandleError(common.Error{
+			Message:  "Couldn't create WAV file",
+			Err:      err,
+			ExitCode: common.WavFileCreationError,
+		})
+		return
+	}
+	defer file.Close()
+
+	enc := wav.NewEncoder(file, 48000, 32, 1, 1)
+	defer enc.Close()
+
+	buffer := &audio.IntBuffer{
+		Data: pcmBuffer,
+		Format: &audio.Format{
+			SampleRate:  48000,
+			NumChannels: 1,
+		},
+	}
+
+	if err := enc.Write(buffer); err != nil {
 		common.HandleError(common.Error{
 			Message:  "Couldn't write WAV file",
 			Err:      err,
