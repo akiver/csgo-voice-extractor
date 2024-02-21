@@ -9,10 +9,11 @@ import (
 )
 
 type ExtractOptions struct {
-	DemoPath   string
-	DemoName   string
-	File       *os.File
-	OutputPath string
+	DemoPath        string
+	DemoName        string
+	File            *os.File
+	OutputPath      string
+	NetworkProtocol int32 // CS2 only
 }
 
 func GetPlayerID(parser dem.Parser, steamID uint64) string {

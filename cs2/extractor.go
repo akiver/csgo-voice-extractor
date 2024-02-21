@@ -1,6 +1,7 @@
 package cs2
 
 import (
+	"embed"
 	"errors"
 	"fmt"
 	"log"
@@ -13,17 +14,64 @@ import (
 	"github.com/go-audio/wav"
 	dem "github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
 	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/msgs2"
+	"google.golang.org/protobuf/proto"
 )
 
 // Opus format since the arms race update (07/02/2024), Steam format before that.
 var format msgs2.VoiceDataFormatT
 
+func GetDemoNetworkProtocol(demoPath string, file *os.File) (int32, error) {
+	br := NewLargeBitReader(file)
+	br.ReadBytes(8) // Some data
+	msgType := br.ReadVarInt32()
+	// The first proto message should always be EDemoCommands.DEM_FileHeader
+	if msgType != 1 {
+		return 0, errors.New("First message is not DEM_FileHeader")
+	}
+
+	br.ReadVarInt32() // tick
+	size := br.ReadVarInt32()
+	bytes := br.ReadBytes(int(size))
+	var msg msgs2.CDemoFileHeader
+	err := proto.Unmarshal(bytes, &msg)
+	if err != nil {
+		return 0, errors.New("Failed to parse CDemoFileHeader")
+	}
+
+	return msg.GetNetworkProtocol(), nil
+}
+
+//go:embed event-list-dump/*.bin
+var eventListFolder embed.FS
+
+func getGameEventListBinForProtocol(networkProtocol int32) ([]byte, error) {
+	switch {
+	case networkProtocol < 13992:
+		return eventListFolder.ReadFile("event-list-dump/s2_CMsgSource1LegacyGameEventList.bin")
+	default:
+		return eventListFolder.ReadFile("event-list-dump/s2_CMsgSource1LegacyGameEventList_13992.bin")
+	}
+}
+
 func Extract(options common.ExtractOptions) {
 	common.AssertLibraryFilesExist()
 
-	var voiceDataPerPlayer = map[string][][]byte{}
-	parser := dem.NewParser(options.File)
+	demoPath := options.DemoPath
+	parserConfig := dem.DefaultParserConfig
+	gameEventListBin, err := getGameEventListBinForProtocol(options.NetworkProtocol)
+	if err != nil {
+		common.HandleError(common.Error{
+			Message:  fmt.Sprintf("Failed to parse demo: %s\n", demoPath),
+			Err:      err,
+			ExitCode: common.ParsingError,
+		})
+		return
+	}
+	parserConfig.Source2FallbackGameEventListBin = gameEventListBin
+
+	parser := dem.NewParserWithConfig(options.File, parserConfig)
 	defer parser.Close()
+	var voiceDataPerPlayer = map[string][][]byte{}
 
 	parser.RegisterNetMessageHandler(func(m *msgs2.CSVCMsg_VoiceData) {
 		playerID := common.GetPlayerID(parser, m.GetXuid())
@@ -48,9 +96,8 @@ func Extract(options common.ExtractOptions) {
 		voiceDataPerPlayer[playerID] = append(voiceDataPerPlayer[playerID], m.Audio.VoiceData)
 	})
 
-	err := parser.ParseToEnd()
+	err = parser.ParseToEnd()
 
-	demoPath := options.DemoPath
 	isCorruptedDemo := errors.Is(err, dem.ErrUnexpectedEndOfDemo)
 	isCanceled := errors.Is(err, dem.ErrCancelled)
 	if err != nil && !isCorruptedDemo && !isCanceled {
@@ -59,6 +106,7 @@ func Extract(options common.ExtractOptions) {
 			Err:      err,
 			ExitCode: common.ParsingError,
 		})
+		return
 	}
 
 	if isCanceled {
