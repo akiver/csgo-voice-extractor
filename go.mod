@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/go-audio/audio v1.0.0
 	github.com/go-audio/wav v1.1.0
-	github.com/markus-wa/demoinfocs-golang/v4 v4.0.3
+	github.com/markus-wa/demoinfocs-golang/v4 v4.0.5
 	github.com/markus-wa/gobitread v0.2.3
 	github.com/pkg/errors v0.9.1
 	github.com/youpy/go-wav v0.3.2
