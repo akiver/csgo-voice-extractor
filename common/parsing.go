@@ -20,8 +20,8 @@ func GetPlayerID(parser dem.Parser, steamID uint64) string {
 	playerName := ""
 	for _, player := range parser.GameState().Participants().All() {
 		if player.SteamID64 == steamID {
-			var nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9]+`)
-			playerName = nonAlphanumericRegex.ReplaceAllString(player.Name, "")
+			invalidCharsRegex := regexp.MustCompile(`[\\/:*?"<>|]`)
+			playerName = invalidCharsRegex.ReplaceAllString(player.Name, "")
 			break
 		}
 	}
