@@ -1,6 +1,6 @@
 {
   "name": "@akiver/csgo-voice-extractor",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "CLI to export players' voices from CSGO/CS2 demos into WAV files.",
   "author": "AkiVer",
   "license": "MIT",
