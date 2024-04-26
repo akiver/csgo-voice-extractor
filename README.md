@@ -118,8 +118,9 @@ _Because the CSGO audio library is a 32-bit DLL, you need a 32-bit `GCC` and set
 
 1. Install [Homebrew](https://brew.sh) **x64 version**
 2. `arch -x86_64 brew install opus`
-3. `cp /usr/local/Cellar/opus/1.4/lib/libopus.0.dylib dist/bin/darwin-x64` (`arch -x86_64 brew info opus` to get the path)
-4. `DYLD_LIBRARY_PATH=dist/bin/darwin-x64 CGO_ENABLED=1 GOARCH=amd64 go run -tags nolibopusfile .`
+3. `arch -x86_64 brew install pkg-config`
+4. `cp /usr/local/Cellar/opus/1.4/lib/libopus.0.dylib dist/bin/darwin-x64` (`arch -x86_64 brew info opus` to get the path)
+5. `DYLD_LIBRARY_PATH=dist/bin/darwin-x64 CGO_ENABLED=1 GOARCH=amd64 go run -tags nolibopusfile .`
 
 > [!WARNING]  
 > On macOS ARM64, the Go debugger breakpoints will not work because the executable must target amd64 but your OS is ARM64.

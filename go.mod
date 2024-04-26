@@ -26,3 +26,5 @@ require (
 	github.com/zaf/g711 v0.0.0-20190814101024-76a4a538f52b // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 )
+
+replace github.com/markus-wa/demoinfocs-golang/v4 v4.0.5 => github.com/markus-wa/demoinfocs-golang/v4 v4.0.6-0.20240426103129-52940a58e755
