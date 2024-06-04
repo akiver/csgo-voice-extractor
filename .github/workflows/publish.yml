@@ -1,0 +1,139 @@
+name: Publish new release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-type:
+        type: choice
+        description: Select the release type
+        required: true
+        options:
+          - patch
+          - minor
+
+jobs:
+  ensure-changes:
+    name: Ensure there are changes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to get all existing tags
+          fetch-tags: true
+
+      - name: Stop if there are no new changes
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 --always)
+          LAST_COMMIT=$(git rev-parse HEAD)
+          LASTEST_TAG_COMMIT=$(git rev-list -n 1 $LATEST_TAG)
+          if [ "$LASTEST_TAG_COMMIT" == "$LAST_COMMIT" ]; then
+            echo "No new changes since the last tag. Stopping the workflow."
+            exit 1
+          fi
+          exit 0
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    needs: ensure-changes
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        # The x86_64 version is installed in /usr/local/bin/brew
+        # We could remove the 2 commands that use shellenv and invoke brew like this:
+        # arch -x86_64 /usr/local/bin/brew xxx
+        run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+          /usr/sbin/softwareupdate --install-rosetta --agree-to-license
+          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          (echo; echo 'eval "$(/usr/local/bin/brew shellenv)"') >> /Users/runner/.bash_profile
+          eval "$(/usr/local/bin/brew shellenv)"
+          arch -x86_64 brew install opus
+          arch -x86_64 brew install pkg-config
+          OPUS_VERSION=$(arch -x86_64 brew info --json opus | jq -r '.[].versions.stable')
+          cp /usr/local/Cellar/opus/$OPUS_VERSION/lib/libopus.0.dylib dist/bin/darwin-x64
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+
+      - name: Build
+        run: |
+          make build-darwin
+          cd dist/bin
+          zip -r darwin-x64.zip darwin-x64
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: darwin
+          path: dist/bin/darwin-x64.zip
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    needs: ensure-changes
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt install pkg-config libopus-dev
+          cp /usr/lib/x86_64-linux-gnu/libopus.so.0 dist/bin/linux-x64
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+
+      - name: Build
+        run: |
+          make build-linux
+          cd dist/bin
+          zip -r linux-x64.zip linux-x64
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/bin/linux-x64.zip
+
+  # TODO finish Windows build process
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    needs: ensure-changes
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          choco install pkgconfiglite
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+
+      - name: Build
+        run: |
+          make build-windows
+          cd dist/bin
+          zip -r win32-x64.zip win32-x64
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/bin/win32-x64.zip
