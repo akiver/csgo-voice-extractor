@@ -5,11 +5,11 @@ go 1.21
 require (
 	github.com/go-audio/audio v1.0.0
 	github.com/go-audio/wav v1.1.0
-	github.com/markus-wa/demoinfocs-golang/v4 v4.0.5
+	github.com/markus-wa/demoinfocs-golang/v4 v4.2.1
 	github.com/markus-wa/gobitread v0.2.3
 	github.com/pkg/errors v0.9.1
 	github.com/youpy/go-wav v0.3.2
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.34.1
 	gopkg.in/hraban/opus.v2 v2.0.0-20230925203106-0188a62cb302
 )
 
@@ -26,5 +26,3 @@ require (
 	github.com/zaf/g711 v0.0.0-20190814101024-76a4a538f52b // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 )
-
-replace github.com/markus-wa/demoinfocs-golang/v4 v4.0.5 => github.com/markus-wa/demoinfocs-golang/v4 v4.0.6-0.20240426103129-52940a58e755
