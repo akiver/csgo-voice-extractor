@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -171,7 +172,7 @@ func convertAudioDataToWavFiles(payloads [][]byte, fileName string) {
 			converted := make([]int, len(pcm))
 			for i, v := range pcm {
 				// Float32 buffer implementation is wrong in go-audio, so we have to convert to int before encoding
-				converted[i] = int(v * 2147483647)
+				converted[i] = int(v * math.MaxInt32)
 			}
 
 			o = append(o, converted...)
@@ -232,7 +233,7 @@ func convertOpusAudioDataToWavFiles(data [][]byte, fileName string) {
 		pp := make([]int, len(pcm))
 
 		for i, p := range pcm {
-			pp[i] = int(p * 2147483647)
+			pp[i] = int(p * math.MaxInt32)
 		}
 
 		pcmBuffer = append(pcmBuffer, pp...)
