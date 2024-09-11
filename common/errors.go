@@ -121,7 +121,7 @@ func AssertLibraryFilesExist() {
 	}
 }
 
-func AssertCodeIsSupported() {
+func AssertCodecIsSupported() {
 	if UnsupportedCodecError != nil {
 		HandleError(Error{
 			Message: fmt.Sprintf(

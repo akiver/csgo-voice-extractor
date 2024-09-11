@@ -118,7 +118,7 @@ func Extract(options common.ExtractOptions) {
 	}
 
 	playersVoiceData, err := getPlayersVoiceData(options.File)
-	common.AssertCodeIsSupported()
+	common.AssertCodecIsSupported()
 
 	demoPath := options.DemoPath
 	isCorruptedDemo := errors.Is(err, dem.ErrUnexpectedEndOfDemo)
