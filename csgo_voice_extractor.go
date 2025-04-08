@@ -78,7 +78,6 @@ func main() {
 
 	for _, demoPath := range demoPaths {
 		fmt.Printf("Processing demo %s\n", demoPath)
-		var networkProtocol int32
 
 		file, err := os.Open(demoPath)
 		if err != nil {
@@ -108,17 +107,7 @@ func main() {
 			})
 			continue
 		}
-		if timestamp == "PBDEMS2" {
-			networkProtocol, err = cs2.GetDemoNetworkProtocol(demoPath, file)
-			if err != nil {
-				common.HandleError(common.Error{
-					Message:  fmt.Sprintf("Failed to parse demo: %s\n", demoPath),
-					Err:      err,
-					ExitCode: common.ParsingError,
-				})
-				continue
-			}
-		}
+
 		_, err = file.Seek(0, 0)
 		if err != nil {
 			common.HandleError(common.Error{
@@ -130,11 +119,10 @@ func main() {
 		}
 
 		options := common.ExtractOptions{
-			DemoPath:        demoPath,
-			DemoName:        strings.TrimSuffix(filepath.Base(demoPath), filepath.Ext(demoPath)),
-			File:            file,
-			OutputPath:      outputPath,
-			NetworkProtocol: networkProtocol,
+			DemoPath:   demoPath,
+			DemoName:   strings.TrimSuffix(filepath.Base(demoPath), filepath.Ext(demoPath)),
+			File:       file,
+			OutputPath: outputPath,
 		}
 
 		switch timestamp {
