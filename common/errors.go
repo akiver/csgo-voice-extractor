@@ -49,6 +49,22 @@ func (err *Error) Error() string {
 	return fmt.Sprintf("%s\n", err.Message)
 }
 
+func NewError(message string, err error, exitCode ExitCode) Error {
+	return Error{
+		Message:  message,
+		Err:      err,
+		ExitCode: exitCode,
+	}
+}
+
+func NewDecodingError(message string, err error) Error {
+	return NewError(message, err, DecodingError)
+}
+
+func NewWavFileCreationError(message string, err error) Error {
+	return NewError(message, err, WavFileCreationError)
+}
+
 func HandleError(err Error) Error {
 	fmt.Fprint(os.Stderr, err.Error())
 	if ShouldExitOnFirstError {

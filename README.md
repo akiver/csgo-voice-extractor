@@ -7,9 +7,23 @@ CLI to export players' voices from CSGO/CS2 demos into WAV files.
 
 ## Installation
 
-Download the last release for your OS from [GitHub](https://github.com/akiver/csgo-voice-extractor/releases/latest).
+Download the latest release for your OS from [GitHub](https://github.com/akiver/csgo-voice-extractor/releases/latest).
 
 ## Usage
+
+### Mode
+
+The program can export voices in 3 different modes:
+
+1. **Split compact**: extracts and concatenates all of each player's voice segments into separate WAV files. Each player will have their own WAV file containing only their voice data (without silence), and the files will be named after the player's Steam ID. This is the default mode.
+2. **Split full**: extracts players' voices into separate WAV files that have the same duration as the demo file. Each player will have their own WAV file with voice segments placed at their original timestamps, and the files will be named after the player's Steam ID.
+3. **Single full**: extracts and merges all players' voices into a single WAV file that has the same duration as the demo file, preserving the original timing of all voice communications.
+
+To change the mode, you have to set the `-mode` argument. The possible values are:
+
+- `split-compact` (default)
+- `split-full`
+- `single-full`
 
 ### Windows
 
@@ -48,6 +62,14 @@ LD_LIBRARY_PATH=. csgove demoPaths... [-output]
 
 Folder location where audio files will be written. Current working directory by default.
 
+`-mode <string>`
+
+Output mode that determines how the voices are extracted and saved:
+
+- `split-compact` (default): separate files per player, without silence
+- `split-full`: separate files per player, with demo-length silence
+- `single-full`: single merged file with all players' voices
+
 `-exit-on-first-error`
 
 Stop the program at the first error encountered. By default, the program will continue to the next demo to process if an error occurs.
@@ -70,6 +92,12 @@ Change the output location:
 
 ```bash
 csgove -output "C:\Users\username\Desktop\output" myDemo.dem
+```
+
+Extract all voices into a single merged file:
+
+```bash
+csgove -mode single-full myDemo.dem
 ```
 
 ## Developing

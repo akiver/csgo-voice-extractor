@@ -13,6 +13,12 @@ type ExtractOptions struct {
 	DemoName   string
 	File       *os.File
 	OutputPath string
+	Mode       Mode
+}
+
+type VoiceSegment struct {
+	Data      []byte
+	Timestamp float64 // in seconds
 }
 
 func GetPlayerID(parser dem.Parser, steamID uint64) string {
