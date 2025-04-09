@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 
+	"github.com/akiver/csgo-voice-extractor/common"
 	"gopkg.in/hraban/opus.v2"
 )
 
@@ -20,6 +21,11 @@ func NewSteamDecoder(sampleRate int, channels int) (*SteamDecoder, error) {
 	decoder, err := opus.NewDecoder(sampleRate, channels)
 
 	if err != nil {
+		common.HandleError(common.Error{
+			Message:  "Failed to create Steam decoder",
+			Err:      err,
+			ExitCode: common.DecodingError,
+		})
 		return nil, err
 	}
 
@@ -119,7 +125,16 @@ func (d *SteamDecoder) decodeLoss(samples uint16) ([]float32, error) {
 }
 
 func NewOpusDecoder(sampleRate int, channels int) (decoder *opus.Decoder, err error) {
-	return opus.NewDecoder(sampleRate, channels)
+	decoder, err = opus.NewDecoder(sampleRate, channels)
+	if err != nil {
+		common.HandleError(common.Error{
+			Message:  "Failed to create Opus decoder",
+			Err:      err,
+			ExitCode: common.DecodingError,
+		})
+	}
+
+	return decoder, err
 }
 
 func Decode(decoder *opus.Decoder, data []byte) (pcm []float32, err error) {

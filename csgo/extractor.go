@@ -7,22 +7,49 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"unsafe"
 
 	"github.com/akiver/csgo-voice-extractor/common"
+	"github.com/go-audio/audio"
+	goWav "github.com/go-audio/wav"
 	dem "github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
 	"github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs/msg"
-	wav "github.com/youpy/go-wav"
+	"github.com/youpy/go-wav"
 	"google.golang.org/protobuf/proto"
 )
 
-var demoPaths []string
+const (
+	SampleRate     = 22050
+	BytesPerSample = 2 // 16-bit PCM
+)
 
-func getPlayersVoiceData(file *os.File) (map[string][]byte, error) {
-	var voiceDataPerPlayer = map[string][]byte{}
+func createTempFile(prefix string) (string, error) {
+	tmpFile, err := os.CreateTemp("", prefix)
+	if err != nil {
+		common.HandleError(common.Error{
+			Message:  fmt.Sprintf("Failed to create temporary file: %s", err),
+			ExitCode: common.DecodingError,
+		})
+		return "", err
+	}
+
+	filePath := tmpFile.Name()
+	tmpFile.Close()
+
+	return filePath, nil
+}
+
+func buildPlayerWavFilePath(playerID string, demoName string, outputPath string) string {
+	return filepath.Join(outputPath, fmt.Sprintf("%s_%s.wav", demoName, playerID))
+}
+
+func getSegments(file *os.File) (map[string][]common.VoiceSegment, float64, error) {
+	var segments = map[string][]common.VoiceSegment{}
+
 	parserConfig := dem.DefaultParserConfig
 	parserConfig.AdditionalNetMessageCreators = map[int]dem.NetMessageCreator{
 		int(msg.SVC_Messages_svc_VoiceData): func() proto.Message {
@@ -53,54 +80,367 @@ func getPlayersVoiceData(file *os.File) (map[string][]byte, error) {
 			return
 		}
 
-		if voiceDataPerPlayer[playerID] == nil {
-			voiceDataPerPlayer[playerID] = make([]byte, 0)
+		if segments[playerID] == nil {
+			segments[playerID] = make([]common.VoiceSegment, 0)
 		}
-
-		voiceDataPerPlayer[playerID] = append(voiceDataPerPlayer[playerID], m.GetVoiceData()...)
+		segments[playerID] = append(segments[playerID], common.VoiceSegment{
+			Data:      m.GetVoiceData(),
+			Timestamp: parser.CurrentTime().Seconds(),
+		})
 	})
 
 	err := parser.ParseToEnd()
+	durationSeconds := parser.CurrentTime().Seconds()
 
-	return voiceDataPerPlayer, err
+	return segments, durationSeconds, err
 }
 
-func convertPcmFileToWavFile(pcmFilePath string, wavFilePath string) {
-	data, err := os.ReadFile(pcmFilePath)
-	if err != nil {
-		common.HandleError(common.Error{
-			Message:  "Failed to read PCM file",
-			Err:      err,
-			ExitCode: common.WavFileCreationError,
-		})
-		return
+func decodeAndWriteVoiceData(bytes []byte, outputFilePath string) bool {
+	cOutputFilePath := C.CString(outputFilePath)
+	defer C.free(unsafe.Pointer(cOutputFilePath))
+
+	cSize := C.int(len(bytes))
+	cData := (*C.uchar)(unsafe.Pointer(&bytes[0]))
+	result := C.Decode(cSize, cData, cOutputFilePath)
+
+	if result != 0 {
+		common.HandleError(common.NewDecodingError(fmt.Sprintf("Failed to decode voice data: %d", result), nil))
+		return false
 	}
 
-	wavFile, err := os.Create(wavFilePath)
+	return true
+}
+
+func generateAudioFileWithMergedVoices(segmentsPerPlayer map[string][]common.VoiceSegment, durationSeconds float64, demoName string, outputPath string) {
+	wavFilePath := filepath.Join(outputPath, demoName+".wav")
+	wavFile, err := common.CreateWavFile(wavFilePath)
 	if err != nil {
-		common.HandleError(common.Error{
-			Message:  "Couldn't create WAV file",
-			Err:      err,
-			ExitCode: common.WavFileCreationError,
-		})
 		return
 	}
 	defer wavFile.Close()
 
-	var numSamples uint32 = uint32(len(data) / 2)
+	totalSamples := int(durationSeconds * float64(SampleRate))
 	var numChannels uint16 = 1
-	var sampleRate uint32 = 22050
 	var bitsPerSample uint16 = 16
+	writer := wav.NewWriter(wavFile, uint32(totalSamples), numChannels, SampleRate, bitsPerSample)
 
-	writer := wav.NewWriter(wavFile, numSamples, numChannels, sampleRate, bitsPerSample)
-	_, err = writer.Write(data)
+	type VoiceSegmentInfo struct {
+		StartPosition int
+		Data          []byte
+		Length        int
+	}
 
-	if err != nil {
-		common.HandleError(common.Error{
-			Message:  "Couldn't write WAV file",
-			Err:      err,
-			ExitCode: common.WavFileCreationError,
-		})
+	voiceSegments := make([]VoiceSegmentInfo, 0)
+	for _, segments := range segmentsPerPlayer {
+		var previousEndPosition = 0
+		for _, segment := range segments {
+			startSample := int(segment.Timestamp * float64(SampleRate))
+			startPosition := startSample * BytesPerSample
+
+			if startPosition < previousEndPosition {
+				startPosition = previousEndPosition
+			}
+
+			if startPosition >= totalSamples*BytesPerSample {
+				fmt.Printf("Warning: Voice segment at %f seconds exceeds demo duration\n", segment.Timestamp)
+				continue
+			}
+
+			segmentFilePath, err := createTempFile("segment.bin")
+			if err != nil {
+				continue
+			}
+
+			written := decodeAndWriteVoiceData(segment.Data, segmentFilePath)
+			if !written {
+				os.Remove(segmentFilePath)
+				continue
+			}
+
+			samples, err := os.ReadFile(segmentFilePath)
+			os.Remove(segmentFilePath)
+			if err != nil {
+				common.HandleError(common.NewDecodingError(fmt.Sprintf("Failed to read segment PCM file: %s", err), err))
+				continue
+			}
+
+			voiceSegments = append(voiceSegments, VoiceSegmentInfo{
+				StartPosition: startPosition,
+				Data:          samples,
+				Length:        len(samples),
+			})
+
+			previousEndPosition = startPosition + len(samples)
+		}
+	}
+
+	// process in small chunks to avoid high memory usage
+	const chunkSize = 8192 * BytesPerSample
+	for chunkStart := 0; chunkStart < totalSamples*BytesPerSample; chunkStart += chunkSize {
+		chunkEnd := chunkStart + chunkSize
+		if chunkEnd > totalSamples*BytesPerSample {
+			chunkEnd = totalSamples * BytesPerSample
+		}
+
+		chunkLength := chunkEnd - chunkStart
+		mixedChunk := make([]int32, chunkLength/BytesPerSample)
+		activeSources := make([]int, chunkLength/BytesPerSample)
+
+		// find segments that overlap with the current chunk
+		for _, segment := range voiceSegments {
+			segmentEnd := segment.StartPosition + segment.Length
+			// check if this segment does not overlap with the current chunk
+			if segmentEnd <= chunkStart || segment.StartPosition >= chunkEnd {
+				continue
+			}
+
+			// calculate the start and end of the overlap
+			overlapStart := segment.StartPosition
+			if overlapStart < chunkStart {
+				overlapStart = chunkStart
+			}
+			overlapEnd := segmentEnd
+			if overlapEnd > chunkEnd {
+				overlapEnd = chunkEnd
+			}
+
+			// add samples in the chunk and track active sources (players talking at the same time)
+			for i := overlapStart; i < overlapEnd; i += BytesPerSample {
+				sampleIndex := (i - chunkStart) / BytesPerSample
+				sampleStartPosition := i - segment.StartPosition
+
+				if sampleStartPosition >= 0 && sampleStartPosition < segment.Length-1 {
+					sample := int32(int16(uint16(segment.Data[sampleStartPosition]) | uint16(segment.Data[sampleStartPosition+1])<<8))
+					if sample != 0 { // ignore silence
+						mixedChunk[sampleIndex] += sample
+						activeSources[sampleIndex]++
+					}
+				}
+			}
+		}
+
+		// normalize and mix samples in the chunk
+		maxSampleValue := int32(1)
+		chunkBytes := make([]byte, chunkLength)
+		for i, sample := range mixedChunk {
+			if sample == 0 || activeSources[i] == 0 {
+				// write silence
+				chunkBytes[i*BytesPerSample] = 0
+				chunkBytes[i*BytesPerSample+1] = 0
+				continue
+			}
+
+			// normalize the sample if several players are talking at the same time
+			mixCoefficient := 1.0
+			if activeSources[i] > 1 {
+				mixCoefficient = 1.0 / math.Sqrt(float64(activeSources[i]))
+			}
+
+			mixedSample := float64(sample) * mixCoefficient
+			if int32(math.Abs(mixedSample)) > maxSampleValue {
+				maxSampleValue = int32(math.Abs(mixedSample))
+			}
+
+			// clip to int16 range because WAV format requires 16-bit samples
+			if mixedSample > math.MaxInt16 {
+				mixedSample = math.MaxInt16
+			} else if mixedSample < -math.MaxInt16 {
+				mixedSample = -math.MaxInt16
+			}
+
+			// convert back to bytes
+			mixedInt16 := int16(mixedSample)
+			chunkBytes[i*BytesPerSample] = byte(mixedInt16)
+			chunkBytes[i*BytesPerSample+1] = byte(mixedInt16 >> 8)
+		}
+
+		_, err = writer.Write(chunkBytes)
+		if err != nil {
+			common.HandleError(common.Error{
+				Message:  "Couldn't write WAV file",
+				Err:      err,
+				ExitCode: common.WavFileCreationError,
+			})
+		}
+	}
+}
+
+func generateAudioFilesWithDemoLength(segmentsPerPlayer map[string][]common.VoiceSegment, durationSeconds float64, demoName string, outputPath string) {
+	for playerID, segments := range segmentsPerPlayer {
+		wavFilePath := buildPlayerWavFilePath(playerID, demoName, outputPath)
+		totalSamples := int(durationSeconds * float64(SampleRate))
+
+		wavFile, err := common.CreateWavFile(wavFilePath)
+		if err != nil {
+			return
+		}
+		defer wavFile.Close()
+
+		var numChannels uint16 = 1
+		var bitsPerSample uint16 = 16
+		writer := wav.NewWriter(wavFile, uint32(totalSamples), numChannels, SampleRate, bitsPerSample)
+
+		chunkSize := 8192 * BytesPerSample
+		chunkBuffer := make([]byte, chunkSize)
+
+		previousEndPosition := 0
+		segmentIndex := 0
+		for position := 0; position < totalSamples*BytesPerSample; position += chunkSize {
+			// clear the chunk buffer
+			for i := range chunkBuffer {
+				chunkBuffer[i] = 0
+			}
+
+			currentChunkEnd := position + chunkSize
+			if currentChunkEnd > totalSamples*BytesPerSample {
+				currentChunkEnd = totalSamples * BytesPerSample
+				chunkBuffer = chunkBuffer[:currentChunkEnd-position]
+			}
+
+			// find segments that overlap with the current chunk
+			for segmentIndex < len(segments) {
+				segment := segments[segmentIndex]
+				startSample := int(segment.Timestamp * float64(SampleRate))
+				startPosition := startSample * BytesPerSample
+
+				if startPosition < previousEndPosition {
+					startPosition = previousEndPosition
+				}
+
+				if startPosition >= currentChunkEnd {
+					break
+				}
+
+				segmentFilePath, err := createTempFile("segment.bin")
+				if err != nil {
+					segmentIndex++
+					continue
+				}
+
+				written := decodeAndWriteVoiceData(segment.Data, segmentFilePath)
+				if !written {
+					os.Remove(segmentFilePath)
+					segmentIndex++
+					continue
+				}
+
+				samples, err := os.ReadFile(segmentFilePath)
+				os.Remove(segmentFilePath)
+				if err != nil {
+					common.HandleError(common.NewDecodingError(fmt.Sprintf("Failed to read segment PCM file: %s", err), err))
+					segmentIndex++
+					continue
+				}
+
+				segmentEnd := startPosition + len(samples)
+
+				// calculate the start and end of the overlap
+				overlapStart := startPosition
+				if overlapStart < position {
+					overlapStart = position
+				}
+				overlapEnd := segmentEnd
+				if overlapEnd > currentChunkEnd {
+					overlapEnd = currentChunkEnd
+				}
+
+				// copy overlapping data to the chunk buffer
+				if overlapStart < overlapEnd {
+					srcOffset := overlapStart - startPosition
+					destOffset := overlapStart - position
+					copyLength := overlapEnd - overlapStart
+					sampleCount := len(samples)
+					chunkCount := len(chunkBuffer)
+
+					if srcOffset >= 0 && srcOffset < sampleCount &&
+						destOffset >= 0 && destOffset < chunkCount &&
+						srcOffset+copyLength <= sampleCount &&
+						destOffset+copyLength <= chunkCount {
+						copy(chunkBuffer[destOffset:destOffset+copyLength], samples[srcOffset:srcOffset+copyLength])
+					}
+				}
+
+				previousEndPosition = segmentEnd
+				if segmentEnd > currentChunkEnd {
+					break
+				}
+				segmentIndex++
+			}
+
+			_, err = writer.Write(chunkBuffer)
+			if err != nil {
+				common.HandleError(common.Error{
+					Message:  "Couldn't write WAV file",
+					Err:      err,
+					ExitCode: common.WavFileCreationError,
+				})
+				return
+			}
+		}
+	}
+}
+
+func generateAudioFilesWithCompactLength(segmentsPerPlayer map[string][]common.VoiceSegment, demoName string, options common.ExtractOptions) {
+	for playerID, playerSegments := range segmentsPerPlayer {
+		if len(playerSegments) == 0 {
+			continue
+		}
+
+		wavFilePath := buildPlayerWavFilePath(playerID, demoName, options.OutputPath)
+		outFile, err := common.CreateWavFile(wavFilePath)
+		if err != nil {
+			continue
+		}
+		defer outFile.Close()
+
+		enc := goWav.NewEncoder(outFile, SampleRate, 16, 1, 1)
+		defer enc.Close()
+
+		for _, segment := range playerSegments {
+			segmentFilePath, err := createTempFile("segment.bin")
+			if err != nil {
+				continue
+			}
+
+			written := decodeAndWriteVoiceData(segment.Data, segmentFilePath)
+			if !written {
+				os.Remove(segmentFilePath)
+				continue
+			}
+
+			samples, err := os.ReadFile(segmentFilePath)
+			os.Remove(segmentFilePath)
+			if err != nil {
+				common.HandleError(common.NewDecodingError(fmt.Sprintf("Failed to read segment PCM file: %s", err), err))
+				continue
+			}
+
+			if len(samples) > 0 {
+				// convert to ints for WAV encoding
+				numSamples := len(samples) / 2
+				intSamples := make([]int, numSamples)
+				for i := 0; i < numSamples; i++ {
+					sample := int16(uint16(samples[i*2]) | uint16(samples[i*2+1])<<8)
+					intSamples[i] = int(sample)
+				}
+
+				buf := &audio.IntBuffer{
+					Data: intSamples,
+					Format: &audio.Format{
+						SampleRate:  SampleRate,
+						NumChannels: 1,
+					},
+				}
+
+				if err := enc.Write(buf); err != nil {
+					common.HandleError(common.Error{
+						Message:  "Couldn't write WAV file",
+						Err:      err,
+						ExitCode: common.WavFileCreationError,
+					})
+				}
+			}
+		}
 	}
 }
 
@@ -109,6 +449,8 @@ func Extract(options common.ExtractOptions) {
 
 	cLibrariesPath := C.CString(common.LibrariesPath)
 	initAudioLibResult := C.Init(cLibrariesPath)
+	C.free(unsafe.Pointer(cLibrariesPath))
+
 	if initAudioLibResult != 0 {
 		common.HandleError(common.Error{
 			Message:  "Failed to initialize CSGO audio decoder",
@@ -117,7 +459,7 @@ func Extract(options common.ExtractOptions) {
 		return
 	}
 
-	playersVoiceData, err := getPlayersVoiceData(options.File)
+	segmentsPerPlayer, durationSeconds, err := getSegments(options.File)
 	common.AssertCodecIsSupported()
 
 	demoPath := options.DemoPath
@@ -136,7 +478,7 @@ func Extract(options common.ExtractOptions) {
 		return
 	}
 
-	if len(playersVoiceData) == 0 {
+	if len(segmentsPerPlayer) == 0 {
 		common.HandleError(common.Error{
 			Message:  fmt.Sprintf("No voice data found in demo %s\n", demoPath),
 			ExitCode: common.NoVoiceDataFound,
@@ -144,32 +486,13 @@ func Extract(options common.ExtractOptions) {
 		return
 	}
 
+	fmt.Println("Parsing done, generating audio files...")
 	demoName := strings.TrimSuffix(filepath.Base(demoPath), filepath.Ext(demoPath))
-	for playerId, voiceData := range playersVoiceData {
-		playerFileName := fmt.Sprintf("%s_%s", demoName, playerId)
-		pcmTmpFile, err := os.CreateTemp("", "pcm.bin")
-		pcmFilePath := pcmTmpFile.Name()
-		if err != nil {
-			common.HandleError(common.Error{
-				Message:  fmt.Sprintf("Failed to write tmp file: %s\n", pcmFilePath),
-				ExitCode: common.DecodingError,
-			})
-			continue
-		}
-		defer os.Remove(pcmFilePath)
-		cPcmFilePath := C.CString(pcmFilePath)
-		cSize := C.int(len(voiceData))
-		cData := (*C.uchar)(unsafe.Pointer(&voiceData[0]))
-		result := C.Decode(cSize, cData, cPcmFilePath)
-		if result != 0 {
-			common.HandleError(common.Error{
-				Message:  fmt.Sprintf("Failed to decode voice data: %d\n", result),
-				ExitCode: common.DecodingError,
-			})
-			continue
-		}
-
-		wavFilePath := fmt.Sprintf("%s/%s.wav", options.OutputPath, playerFileName)
-		convertPcmFileToWavFile(pcmFilePath, wavFilePath)
+	if options.Mode == common.ModeSingleFull {
+		generateAudioFileWithMergedVoices(segmentsPerPlayer, durationSeconds, demoName, options.OutputPath)
+	} else if options.Mode == common.ModeSplitFull {
+		generateAudioFilesWithDemoLength(segmentsPerPlayer, durationSeconds, demoName, options.OutputPath)
+	} else {
+		generateAudioFilesWithCompactLength(segmentsPerPlayer, demoName, options)
 	}
 }
