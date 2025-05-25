@@ -10,6 +10,7 @@ on:
         options:
           - patch
           - minor
+          - major
 
 jobs:
   ensure-changes:
@@ -73,7 +74,7 @@ jobs:
       - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
-          name: darwin
+          name: darwin-x64
           path: dist/bin/darwin-x64.zip
 
   build-linux:
@@ -104,10 +105,9 @@ jobs:
       - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
-          name: linux
+          name: linux-x64
           path: dist/bin/linux-x64.zip
 
-  # TODO finish Windows build process
   build-windows:
     name: Build Windows
     runs-on: windows-latest
@@ -117,23 +117,113 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install deps
-        run: |
-          choco install pkgconfiglite
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: MINGW32
+          install: >-
+            mingw-w64-i686-gcc
+            mingw-w64-i686-pkg-config
+            make
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
 
+      - name: Install deps
+        run: |
+          choco install zip
+
+      - name: Build Opus
+        run: |
+          git clone https://github.com/xiph/opus
+          cd opus
+          git fetch --tags
+          git checkout tags/v1.5.2
+          mkdir build
+          cd build
+          cmake -G "Visual Studio 17 2022" -A Win32 -DCMAKE_BUILD_TYPE:STRING=Release -DBUILD_SHARED_LIBS=ON ..
+          msbuild opus.sln /p:Configuration=Release /p:Platform=Win32
+          cmake --build . --config Release
+          cd ${{ github.workspace }}
+          cp opus.pc.example opus.pc
+          sed -i 's|^prefix=.*|prefix=${{ github.workspace }}/opus|' opus.pc
+
       - name: Build
         run: |
+          cp opus/build/Release/opus.dll dist/bin/win32-x64
           make build-windows
+        env:
+          PATH: ${{ steps.msys2.outputs.msys2-location }}/mingw32/bin;${{ steps.msys2.outputs.msys2-location }}/usr/bin;${{ env.PATH }}
+          CPATH: ${{ github.workspace }}/opus/include
+          LIBRARY_PATH: ${{ github.workspace }}/opus/build/Release
+
+      - name: Create archive
+        run: |
           cd dist/bin
           zip -r win32-x64.zip win32-x64
 
       - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
-          name: windows
+          name: win32-x64
           path: dist/bin/win32-x64.zip
+
+  publish:
+    name: Publish release
+    runs-on: ubuntu-latest
+    needs: [build-macos, build-linux, build-windows]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to get all existing tags
+          fetch-tags: true
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Bump version
+        run: |
+          git config --global user.name "AkiVer"
+          git config --global user.email ${{ secrets.NPM_EMAIL }}
+          npm version ${{ github.event.inputs.release-type }} --no-git-tag-version --tag-version-prefix="" | awk '{print $$NF}' > /tmp/NEW_VERSION
+          git add package.json
+          git commit -m "chore: version $(cat /tmp/NEW_VERSION)"
+          git tag "v$(cat /tmp/NEW_VERSION)"
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Extract and copy artifacts for NPM
+        run: |
+          mkdir -p dist/bin
+          unzip -o darwin-x64/darwin-x64.zip -d dist/bin
+          unzip -o linux-x64/linux-x64.zip -d dist/bin
+          unzip -o win32-x64/win32-x64.zip -d dist/bin
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            darwin-x64/darwin-x64.zip
+            linux-x64/linux-x64.zip
+            win32-x64/win32-x64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push changes
+        run: |
+          git config --global user.name "AkiVer"
+          git config --global user.email ${{ secrets.NPM_EMAIL }}
+          npm publish --access public
+          git push origin main --tags
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
