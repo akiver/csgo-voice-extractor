@@ -26,6 +26,6 @@ typedef int CeltDecodeFunc(CELTDecoder *st, const unsigned char *data, int len, 
 
 int Init(const char *binariesPath);
 int Release();
-int Decode(int dataSize, unsigned char *data, const char *destinationPath);
+int Decode(int dataSize, unsigned char *data, char *pcmOut, int maxPcmBytes);
 
 #endif

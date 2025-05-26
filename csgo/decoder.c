@@ -74,32 +74,29 @@ int Release() {
 }
 
 
-int Decode(int dataSize, unsigned char *data, const char *destinationPath) {
+int Decode(int dataSize, unsigned char *data, char *pcmOut, int maxPcmBytes) {
     size_t outputSize = (dataSize / PACKET_SIZE) * FRAME_SIZE * 2;
-    int16_t* output = malloc(outputSize);
+    if (outputSize > (size_t)maxPcmBytes) {
+        outputSize = maxPcmBytes;
+    }
+    int16_t* output = (int16_t*)pcmOut;
 
     int read = 0;
     int written = 0;
 
-    while (read < dataSize) {
-        int result = celtDecode(decoder, data + read, PACKET_SIZE, output + written, FRAME_SIZE);
+    while (read < dataSize && (written + FRAME_SIZE * 2) <= maxPcmBytes) {
+        int result = celtDecode(decoder, data + read, PACKET_SIZE, output + (written / 2), FRAME_SIZE);
         if (result < 0) {
             continue;
         }
 
         read += PACKET_SIZE;
-        written += FRAME_SIZE;
+        written += FRAME_SIZE * 2;
     }
 
-    FILE* outputFile = fopen(destinationPath, "wb");
-    if (outputFile == NULL) {
-        fprintf(stderr, "Unable to open PCM output file: %s\n", destinationPath);
-        return EXIT_FAILURE;
+    if (read < dataSize) {
+        fprintf(stderr, "Output buffer too small, some audio data was skipped! Processed %d of %d bytes.\n", read, dataSize);
     }
 
-    fwrite(output, outputSize, 1, outputFile);
-    free(output);
-    fclose(outputFile);
-
-    return EXIT_SUCCESS;
+    return written;
 }

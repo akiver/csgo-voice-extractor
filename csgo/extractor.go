@@ -24,7 +24,9 @@ import (
 
 const (
 	SampleRate     = 22050
-	BytesPerSample = 2 // 16-bit PCM
+	BytesPerSample = 2   // 16-bit PCM
+	PacketSize     = 64  // size of a single encoded voice packet in bytes
+	FrameSize      = 512 // number of samples per frame after decoding
 )
 
 func createTempFile(prefix string) (string, error) {
@@ -95,20 +97,29 @@ func getSegments(file *os.File) (map[string][]common.VoiceSegment, float64, erro
 	return segments, durationSeconds, err
 }
 
-func decodeAndWriteVoiceData(bytes []byte, outputFilePath string) bool {
-	cOutputFilePath := C.CString(outputFilePath)
-	defer C.free(unsafe.Pointer(cOutputFilePath))
-
-	cSize := C.int(len(bytes))
-	cData := (*C.uchar)(unsafe.Pointer(&bytes[0]))
-	result := C.Decode(cSize, cData, cOutputFilePath)
-
-	if result != 0 {
-		common.HandleError(common.NewDecodingError(fmt.Sprintf("Failed to decode voice data: %d", result), nil))
-		return false
+func decodeVoiceData(data []byte) ([]byte, bool) {
+	if len(data) == 0 {
+		return nil, false
 	}
 
-	return true
+	outputSamples := (len(data) / PacketSize) * FrameSize
+	if outputSamples == 0 {
+		outputSamples = FrameSize // fallback for very small packets
+	}
+	outputSize := outputSamples * 2 // 2 bytes per sample
+	pcm := make([]byte, outputSize)
+
+	cData := (*C.uchar)(unsafe.Pointer(&data[0]))
+	cDataSize := C.int(len(data))
+	cPcm := (*C.char)(unsafe.Pointer(&pcm[0]))
+	cPcmSize := C.int(outputSize)
+
+	written := C.Decode(cDataSize, cData, cPcm, cPcmSize)
+	if written <= 0 {
+		return nil, false
+	}
+
+	return pcm[:written], true
 }
 
 func generateAudioFileWithMergedVoices(segmentsPerPlayer map[string][]common.VoiceSegment, durationSeconds float64, demoName string, outputPath string) {
@@ -146,21 +157,9 @@ func generateAudioFileWithMergedVoices(segmentsPerPlayer map[string][]common.Voi
 				continue
 			}
 
-			segmentFilePath, err := createTempFile("segment.bin")
-			if err != nil {
-				continue
-			}
-
-			written := decodeAndWriteVoiceData(segment.Data, segmentFilePath)
-			if !written {
-				os.Remove(segmentFilePath)
-				continue
-			}
-
-			samples, err := os.ReadFile(segmentFilePath)
-			os.Remove(segmentFilePath)
-			if err != nil {
-				common.HandleError(common.NewDecodingError(fmt.Sprintf("Failed to read segment PCM file: %s", err), err))
+			samples, ok := decodeVoiceData(segment.Data)
+			if !ok {
+				common.HandleError(common.NewDecodingError("Failed to decode voice data", nil))
 				continue
 			}
 
@@ -311,23 +310,8 @@ func generateAudioFilesWithDemoLength(segmentsPerPlayer map[string][]common.Voic
 					break
 				}
 
-				segmentFilePath, err := createTempFile("segment.bin")
-				if err != nil {
-					segmentIndex++
-					continue
-				}
-
-				written := decodeAndWriteVoiceData(segment.Data, segmentFilePath)
-				if !written {
-					os.Remove(segmentFilePath)
-					segmentIndex++
-					continue
-				}
-
-				samples, err := os.ReadFile(segmentFilePath)
-				os.Remove(segmentFilePath)
-				if err != nil {
-					common.HandleError(common.NewDecodingError(fmt.Sprintf("Failed to read segment PCM file: %s", err), err))
+				samples, ok := decodeVoiceData(segment.Data)
+				if !ok {
 					segmentIndex++
 					continue
 				}
@@ -397,21 +381,8 @@ func generateAudioFilesWithCompactLength(segmentsPerPlayer map[string][]common.V
 		defer enc.Close()
 
 		for _, segment := range playerSegments {
-			segmentFilePath, err := createTempFile("segment.bin")
-			if err != nil {
-				continue
-			}
-
-			written := decodeAndWriteVoiceData(segment.Data, segmentFilePath)
-			if !written {
-				os.Remove(segmentFilePath)
-				continue
-			}
-
-			samples, err := os.ReadFile(segmentFilePath)
-			os.Remove(segmentFilePath)
-			if err != nil {
-				common.HandleError(common.NewDecodingError(fmt.Sprintf("Failed to read segment PCM file: %s", err), err))
+			samples, ok := decodeVoiceData(segment.Data)
+			if !ok {
 				continue
 			}
 
