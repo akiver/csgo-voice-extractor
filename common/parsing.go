@@ -21,12 +21,19 @@ type VoiceSegment struct {
 	Timestamp float64 // in seconds
 }
 
+var playerNameCache = make(map[uint64]string)
+
 func GetPlayerID(parser dem.Parser, steamID uint64) string {
+	if name, ok := playerNameCache[steamID]; ok {
+		return fmt.Sprintf("%s_%d", name, steamID)
+	}
+
 	playerName := ""
 	for _, player := range parser.GameState().Participants().All() {
 		if player.SteamID64 == steamID {
 			invalidCharsRegex := regexp.MustCompile(`[\\/:*?"<>|]`)
 			playerName = invalidCharsRegex.ReplaceAllString(player.Name, "")
+			playerNameCache[steamID] = playerName
 			break
 		}
 	}
