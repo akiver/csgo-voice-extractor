@@ -14,6 +14,7 @@ type ExtractOptions struct {
 	File       *os.File
 	OutputPath string
 	Mode       Mode
+	SteamIDs   []string
 }
 
 type VoiceSegment struct {

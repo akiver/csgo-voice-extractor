@@ -16,6 +16,7 @@ import (
 var outputPath string
 var demoPaths []string
 var mode string
+var steamIDs []string
 
 func computeOutputPathFlag() {
 	if outputPath == "" {
@@ -52,12 +53,24 @@ func computeDemoPathsArgs() {
 	}
 }
 
+func computeSteamIDsFlag(steamIDsFlag string) {
+	if steamIDsFlag != "" {
+		steamIDs = strings.Split(steamIDsFlag, ",")
+		for i, steamID := range steamIDs {
+			steamIDs[i] = strings.TrimSpace(steamID)
+		}
+	}
+}
+
 func parseArgs() {
+	var steamIDsFlag string
 	flag.StringVar(&outputPath, "output", "", "Output folder where WAV files will be written. Can be relative or absolute, default to the current directory.")
 	flag.BoolVar(&common.ShouldExitOnFirstError, "exit-on-first-error", false, "Exit the program on at the first error encountered, default to false.")
 	flag.StringVar(&mode, "mode", string(common.ModeSplitCompact), "Output mode. Can be 'split-compact', 'split-full' or 'single-full'. Default to 'split-compact'.")
+	flag.StringVar(&steamIDsFlag, "steam-ids", "", "Comma-separated list of Steam IDs 64 to extract voice data for.")
 	flag.Parse()
 
+	computeSteamIDsFlag(steamIDsFlag)
 	computeDemoPathsArgs()
 	computeOutputPathFlag()
 }
@@ -119,6 +132,7 @@ func processDemoFile(demoPath string) {
 		File:       file,
 		OutputPath: outputPath,
 		Mode:       common.Mode(mode),
+		SteamIDs:   steamIDs,
 	}
 
 	switch timestamp {

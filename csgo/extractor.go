@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unsafe"
 
@@ -49,7 +50,7 @@ func buildPlayerWavFilePath(playerID string, demoName string, outputPath string)
 	return filepath.Join(outputPath, fmt.Sprintf("%s_%s.wav", demoName, playerID))
 }
 
-func getSegments(file *os.File) (map[string][]common.VoiceSegment, float64, error) {
+func getSegments(file *os.File, steamIDs []string) (map[string][]common.VoiceSegment, float64, error) {
 	var segments = map[string][]common.VoiceSegment{}
 
 	parserConfig := dem.DefaultParserConfig
@@ -77,7 +78,12 @@ func getSegments(file *os.File) (map[string][]common.VoiceSegment, float64, erro
 	})
 
 	parser.RegisterNetMessageHandler(func(m *msg.CSVCMsg_VoiceData) {
-		playerID := common.GetPlayerID(parser, m.GetXuid())
+		steamID := m.GetXuid()
+		if len(steamIDs) > 0 && !slices.Contains(steamIDs, fmt.Sprintf("%d", steamID)) {
+			return
+		}
+
+		playerID := common.GetPlayerID(parser, steamID)
 		if playerID == "" {
 			return
 		}
@@ -430,7 +436,7 @@ func Extract(options common.ExtractOptions) {
 		return
 	}
 
-	segmentsPerPlayer, durationSeconds, err := getSegments(options.File)
+	segmentsPerPlayer, durationSeconds, err := getSegments(options.File, options.SteamIDs)
 	common.AssertCodecIsSupported()
 
 	demoPath := options.DemoPath

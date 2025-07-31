@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/akiver/csgo-voice-extractor/common"
@@ -516,7 +517,12 @@ func Extract(options common.ExtractOptions) {
 	var format msgs2.VoiceDataFormatT
 
 	parser.RegisterNetMessageHandler(func(m *msgs2.CSVCMsg_VoiceData) {
-		playerID := common.GetPlayerID(parser, m.GetXuid())
+		steamID := m.GetXuid()
+		if len(options.SteamIDs) > 0 && !slices.Contains(options.SteamIDs, fmt.Sprintf("%d", steamID)) {
+			return
+		}
+
+		playerID := common.GetPlayerID(parser, steamID)
 		// Opus format since the arms race update (07/02/2024), Steam Voice format before that.
 		format = m.GetAudio().GetFormat()
 

@@ -70,6 +70,10 @@ Output mode that determines how the voices are extracted and saved:
 - `split-full`: separate files per player, with demo-length silence
 - `single-full`: single merged file with all players' voices
 
+`-steam-ids <string>`
+
+Comma-separated list of Steam IDs 64 to extract voices for. If not provided, voices for all players will be extracted.
+
 `-exit-on-first-error`
 
 Stop the program at the first error encountered. By default, the program will continue to the next demo to process if an error occurs.
@@ -98,6 +102,12 @@ Extract all voices into a single merged file:
 
 ```bash
 csgove -mode single-full myDemo.dem
+```
+
+Extract only voices of specific players:
+
+```bash
+csgove -steam-ids 76561198123456789,76561198123456780 myDemo.dem
 ```
 
 ## Developing
