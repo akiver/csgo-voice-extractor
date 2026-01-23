@@ -28,4 +28,4 @@ require (
 	github.com/zaf/g711 v1.4.0 // indirect
 )
 
-replace github.com/markus-wa/demoinfocs-golang/v4 v4.4.0 => github.com/markus-wa/demoinfocs-golang/v4 v4.4.1-0.20251218225334-6ea41415523b
+replace github.com/markus-wa/demoinfocs-golang/v4 v4.4.0 => github.com/markus-wa/demoinfocs-golang/v4 v4.5.2-0.20260122223834-8c0aa56ca99b
