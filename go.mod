@@ -1,14 +1,12 @@
 module github.com/akiver/csgo-voice-extractor
 
-go 1.24
-
-toolchain go1.24.0
+go 1.27.0
 
 require (
 	github.com/go-audio/audio v1.0.0
 	github.com/go-audio/wav v1.1.0
 	github.com/markus-wa/demoinfocs-golang/v4 v4.4.0
-	github.com/markus-wa/gobitread v0.2.4
+	github.com/markus-wa/gobitread v0.2.5
 	github.com/pkg/errors v0.9.1
 	github.com/youpy/go-wav v0.3.2
 	google.golang.org/protobuf v1.36.11
@@ -21,11 +19,10 @@ require (
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/markus-wa/go-unassert v0.1.3 // indirect
 	github.com/markus-wa/godispatch v1.4.1 // indirect
-	github.com/markus-wa/ice-cipher-go v0.0.0-20230901094113-348096939ba7 // indirect
+	github.com/markus-wa/ice-cipher-go v1.0.0 // indirect
 	github.com/markus-wa/quickhull-go/v2 v2.2.0 // indirect
-	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/youpy/go-riff v0.1.0 // indirect
 	github.com/zaf/g711 v1.4.0 // indirect
 )
 
-replace github.com/markus-wa/demoinfocs-golang/v4 v4.4.0 => github.com/markus-wa/demoinfocs-golang/v4 v4.5.2-0.20260421142611-b5d1f3b8fb30
+replace github.com/markus-wa/demoinfocs-golang/v4 v4.4.0 => github.com/markus-wa/demoinfocs-golang/v4 v4.5.2-0.20261112153901-decf1a65caee
