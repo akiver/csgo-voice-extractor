@@ -49,20 +49,19 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Install deps
-        # The x86_64 version is installed in /usr/local/bin/brew
-        # We could remove the 2 commands that use shellenv and invoke brew like this:
-        # arch -x86_64 /usr/local/bin/brew xxx
         run: |
-          export HOMEBREW_NO_AUTO_UPDATE=1
-          export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
-          /usr/sbin/softwareupdate --install-rosetta --agree-to-license
-          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          (echo; echo 'eval "$(/usr/local/bin/brew shellenv)"') >> /Users/runner/.bash_profile
-          eval "$(/usr/local/bin/brew shellenv)"
-          arch -x86_64 brew install opus
-          arch -x86_64 brew install pkg-config
-          OPUS_VERSION=$(arch -x86_64 brew info --json opus | jq -r '.[].versions.stable')
-          cp /usr/local/Cellar/opus/$OPUS_VERSION/lib/libopus.0.dylib dist/bin/darwin-x64
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install pkgconf
+
+      - name: Build Opus
+        run: |
+          curl -fsSL https://downloads.xiph.org/releases/opus/opus-1.5.2.tar.gz | tar -xz
+          cd opus-1.5.2
+          ./configure --host=x86_64-apple-darwin --prefix="$RUNNER_TEMP/opus" CC="clang -arch x86_64" --disable-doc --disable-extra-programs
+          make -j"$(sysctl -n hw.ncpu)"
+          make install
+          lipo "$RUNNER_TEMP/opus/lib/libopus.0.dylib" -verify_arch x86_64
+          cp "$RUNNER_TEMP/opus/lib/libopus.0.dylib" "$GITHUB_WORKSPACE/dist/bin/darwin-x64"
+          echo "PKG_CONFIG_PATH=$RUNNER_TEMP/opus/lib/pkgconfig" >> "$GITHUB_ENV"
 
       - name: Setup Go
         uses: actions/setup-go@v7
